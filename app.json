@@ -12,10 +12,6 @@
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/homzy-icon.png"
-      },
       "package": "com.homzy.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -47,8 +43,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "c34836e5-c0be-4364-873d-5b4f56b36c96"
+        "projectId": "439d3664-ac04-4805-be0a-6d07ae09ae83"
       }
-    }
+    },
+    "owner": "smit09"
   }
 }
