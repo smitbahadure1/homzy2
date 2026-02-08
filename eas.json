@@ -5,14 +5,28 @@
     "build": {
         "development": {
             "developmentClient": true,
-            "distribution": "internal"
+            "distribution": "internal",
+            "env": {
+                "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aGFybWxlc3MtZm94aG91bmQtMTcuY2xlcmsuYWNjb3VudHMuZGV2JA"
+            }
         },
         "preview": {
             "android": {
                 "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aGFybWxlc3MtZm94aG91bmQtMTcuY2xlcmsuYWNjb3VudHMuZGV2JA"
             }
         },
-        "production": {}
+        "production": {
+            "android": {
+                "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aGFybWxlc3MtZm94aG91bmQtMTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
+                "NODE_ENV": "production"
+            }
+        }
     },
     "submit": {
         "production": {}

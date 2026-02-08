@@ -2,6 +2,7 @@ import { Inter_400Regular, Inter_700Bold, useFonts } from '@expo-google-fonts/in
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Text, View } from 'react-native';
 import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';
 import { ThemeProvider as AppThemeProvider, useTheme } from './context/ThemeContext';
@@ -33,13 +34,18 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-if (!clerkPublishableKey) {
-  throw new Error(
-    'Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env',
-  );
-}
-
 export default function RootLayout() {
+  if (!clerkPublishableKey) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ textAlign: 'center' }}>
+          Configuration Error: Missing Clerk Publishable Key.
+          Please check your environment variables or .env file.
+        </Text>
+      </View>
+    );
+  }
+
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_700Bold,
