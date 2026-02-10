@@ -24,7 +24,7 @@
             },
             "env": {
                 "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_aGFybWxlc3MtZm94aG91bmQtMTcuY2xlcmsuYWNjb3VudHMuZGV2JA",
-                "NODE_ENV": "production"
+                "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
             }
         }
     },
