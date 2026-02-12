@@ -1,3 +1,4 @@
+import { ThemeProvider as AppThemeProvider, useTheme } from '@/context/ThemeContext';
 import { Inter_400Regular, Inter_700Bold, useFonts } from '@expo-google-fonts/inter';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
@@ -5,7 +6,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Text, View } from 'react-native';
 import 'react-native-reanimated';
 import 'react-native-url-polyfill/auto';
-import { ThemeProvider as AppThemeProvider, useTheme } from './context/ThemeContext';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -27,7 +27,7 @@ function RootContent() {
   );
 }
 
-import { FavoritesProvider } from './context/FavoritesContext';
+import { FavoritesProvider } from '@/context/FavoritesContext';
 
 import { tokenCache } from '@/lib/auth';
 import { ClerkProvider } from '@clerk/clerk-expo';

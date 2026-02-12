@@ -1,5 +1,5 @@
 
-import { Property } from '@/app/services/realEstateService';
+import { Property } from '@/services/realEstateService';
 import React, { createContext, ReactNode, useContext, useState } from 'react';
 
 type FavoritesContextType = {

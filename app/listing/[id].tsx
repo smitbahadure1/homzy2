@@ -1,4 +1,6 @@
 
+import { useFavorites } from '@/context/FavoritesContext';
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,8 +8,6 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFavorites } from '../context/FavoritesContext';
-import { useTheme } from '../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 

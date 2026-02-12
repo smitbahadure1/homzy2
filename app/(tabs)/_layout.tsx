@@ -1,9 +1,9 @@
 
+import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { useTheme } from '../context/ThemeContext';
 
 export default function TabLayout() {
   const { theme, isDarkMode } = useTheme();

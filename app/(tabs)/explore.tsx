@@ -1,5 +1,7 @@
 
-import { fetchRealEstateData, Property } from '@/app/services/realEstateService';
+import { useFavorites } from '@/context/FavoritesContext';
+import { useTheme } from '@/context/ThemeContext';
+import { fetchRealEstateData, Property } from '@/services/realEstateService';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -7,8 +9,6 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Dimensions, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFavorites } from '../context/FavoritesContext';
-import { useTheme } from '../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
