@@ -16,25 +16,25 @@ const SLIDES = [
         id: '1',
         title: 'Discover your\ndream home',
         subtitle: 'Find the perfect place to stay for your vacation, business trip, or weekend getaway.',
-        image: 'https://images.pexels.com/photos/259588/pexels-photo-259588.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2', // Modern House
+        image: require('../assets/images/house_1.jpg'),
     },
     {
         id: '2',
         title: 'Stay comfortably\nanywhere',
         subtitle: 'From cozy cottages to luxury villas, find accommodations that match your style.',
-        image: 'https://images.pexels.com/photos/271624/pexels-photo-271624.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2', // Interior
+        image: require('../assets/images/house_5.jpg'),
     },
     {
         id: '3',
         title: 'Experience local\nliving',
         subtitle: 'Immerse yourself in the local culture and live like a local wherever you go.',
-        image: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2', // Lifestyle/Travel
+        image: require('../assets/images/house_3.jpg'),
     },
     {
         id: '4', // Final Action Slide
         title: 'Let’s get\nstarted',
         subtitle: 'Sign in or create an account to start your journey with Homzy.',
-        image: 'https://images.pexels.com/photos/1643383/pexels-photo-1643383.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2', // Welcoming/Door
+        image: require('../assets/images/house_8.jpg'),
     }
 ];
 
@@ -102,7 +102,7 @@ export default function OnboardingScreen() {
     const renderItem = ({ item, index }: { item: typeof SLIDES[0], index: number }) => (
         <View style={{ width, flex: 1 }}>
             <ImageBackground
-                source={{ uri: item.image }}
+                source={item.image}
                 style={styles.imageBackground}
                 resizeMode="cover"
             >

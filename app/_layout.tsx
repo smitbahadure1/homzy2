@@ -1,3 +1,4 @@
+
 import { FavoritesProvider } from '@/context/FavoritesContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '@/context/ThemeContext';
 import { tokenCache } from '@/lib/auth';

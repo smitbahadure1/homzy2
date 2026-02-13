@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "Homzy",
-    "slug": "Homzy",
+    "name": "FlashRom",
+    "slug": "FlashRom",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/homzy-icon.png",
-    "scheme": "homzy",
+    "scheme": "flashrom",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.homzy.app",
+      "package": "com.flashrom.app",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
