@@ -162,7 +162,13 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.reserveBtn}>
+        <TouchableOpacity
+          style={styles.reserveBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            router.push({ pathname: '/listing/[id]', params: { ...item } });
+          }}
+        >
           <Text style={styles.reserveBtnText}>Reserve</Text>
         </TouchableOpacity>
       </View>

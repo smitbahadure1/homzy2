@@ -1,30 +1,22 @@
 
+import { useBookings } from '@/context/BookingsContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-type Trip = {
-    id: string;
-    status: string;
-    image: string;
-    location: string;
-    title: string;
-    date: string;
-};
-
-const MOCK_BOOKINGS: Trip[] = [];
 
 export default function BookingScreen() {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
+    const { bookings, cancelBooking } = useBookings();
 
-    const upcomingTrips = MOCK_BOOKINGS.filter(b => b.status === 'Upcoming');
-    const pastTrips = MOCK_BOOKINGS.filter(b => b.status !== 'Upcoming');
+    const upcomingTrips = bookings.filter(b => b.status === 'Upcoming');
+    const pastTrips = bookings.filter(b => b.status !== 'Upcoming');
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -79,11 +71,27 @@ export default function BookingScreen() {
                                     <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
                                     <View style={styles.upcomingActions}>
-                                        <TouchableOpacity style={styles.actionBtn}>
+                                        <TouchableOpacity
+                                            style={styles.actionBtn}
+                                            onPress={() => router.push({ pathname: '/listing/[id]', params: { ...trip } })}
+                                        >
                                             <Text style={[styles.actionBtnText, { color: theme.text }]}>Show details</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionBtn}>
-                                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Get directions</Text>
+                                        <TouchableOpacity
+                                            style={styles.actionBtn}
+                                            onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                                Alert.alert(
+                                                    "Cancel Reservation",
+                                                    "Are you sure you want to cancel this trip?",
+                                                    [
+                                                        { text: "No", style: "cancel" },
+                                                        { text: "Yes, Cancel", style: 'destructive', onPress: () => cancelBooking(trip.id) }
+                                                    ]
+                                                );
+                                            }}
+                                        >
+                                            <Text style={[styles.actionBtnText, { color: '#FF385C' }]}>Cancel</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>

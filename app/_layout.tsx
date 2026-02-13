@@ -33,6 +33,8 @@ function RootContent() {
 
 const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
+import { BookingsProvider } from '@/context/BookingsContext';
+
 export default function RootLayout() {
   if (!clerkPublishableKey) {
     return (
@@ -56,7 +58,9 @@ export default function RootLayout() {
     <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
       <AppThemeProvider>
         <FavoritesProvider>
-          <RootContent />
+          <BookingsProvider>
+            <RootContent />
+          </BookingsProvider>
         </FavoritesProvider>
       </AppThemeProvider>
     </ClerkProvider>

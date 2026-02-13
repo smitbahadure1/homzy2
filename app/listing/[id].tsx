@@ -1,4 +1,6 @@
 
+
+import { useBookings } from '@/context/BookingsContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +28,7 @@ export default function ListingDetailScreen() {
     const insets = useSafeAreaInsets();
     const { theme, isDarkMode } = useTheme();
     const { isFavorite, toggleFavorite } = useFavorites();
+    const { addBooking } = useBookings();
     const [activeSlide, setActiveSlide] = useState(0);
     const [showAllAmenities, setShowAllAmenities] = useState(false);
 
@@ -100,9 +103,7 @@ export default function ListingDetailScreen() {
         setShowCalendar(true);
     };
 
-    const handleGuestEdit = () => {
-        setGuestCount(prev => prev >= 4 ? 1 : prev + 1);
-    };
+
 
     const handleBooking = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -122,6 +123,18 @@ export default function ListingDetailScreen() {
             }
             setStep(2);
         } else {
+            const newTrip = {
+                id: Date.now().toString(),
+                status: 'Upcoming',
+                image: mainImage,
+                location: String(location),
+                title: String(title),
+                date: startDate && endDate ? `Oct ${startDate} - Oct ${endDate}` : 'Dates TBD',
+                price: calculatedPrice,
+                guests: guestCount
+            };
+            addBooking(newTrip); // Fix type error by assuming newTrip matches Trip type or cast if needed. However context expects Trip.
+
             setBookingModalVisible(false);
             setTimeout(() => {
                 setCustomAlert({ visible: true, title: 'Booking Confirmed!', message: 'You are all set! Have a great trip.', type: 'success' });
@@ -434,9 +447,30 @@ export default function ListingDetailScreen() {
                                         <Text style={[styles.tripLabel, { color: theme.text }]}>Guests</Text>
                                         <Text style={[styles.tripValue, { color: theme.subText }]}>{guestCount} guest{guestCount > 1 ? 's' : ''}</Text>
                                     </View>
-                                    <TouchableOpacity onPress={handleGuestEdit}>
-                                        <Text style={[styles.editLink, { color: theme.text }]}>Edit</Text>
-                                    </TouchableOpacity>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                setGuestCount(Math.max(1, guestCount - 1));
+                                            }}
+                                            style={[styles.counterBtn, { borderColor: theme.border, backgroundColor: theme.card, opacity: guestCount <= 1 ? 0.5 : 1 }]}
+                                            disabled={guestCount <= 1}
+                                        >
+                                            <Ionicons name="remove" size={18} color={theme.text} />
+                                        </TouchableOpacity>
+
+                                        <Text style={[styles.tripValue, { color: theme.text, fontSize: 16, fontWeight: '600', minWidth: 20, textAlign: 'center' }]}>{guestCount}</Text>
+
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                setGuestCount(Math.min(10, guestCount + 1));
+                                            }}
+                                            style={[styles.counterBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+                                        >
+                                            <Ionicons name="add" size={18} color={theme.text} />
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
 
                                 <View style={[styles.bookingDivider, { backgroundColor: theme.border }]} />
