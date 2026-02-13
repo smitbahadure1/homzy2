@@ -1,3 +1,4 @@
+import { useTheme } from '@/context/ThemeContext';
 import { useWarmUpBrowser } from '@/lib/useWarmUpBrowser';
 import { useAuth, useOAuth, useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { useTheme } from './context/ThemeContext';
 
 WebBrowser.maybeCompleteAuthSession();
 

@@ -1,3 +1,4 @@
+import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@clerk/clerk-expo';
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,7 +8,6 @@ import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { Dimensions, FlatList, Image, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useTheme } from './context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
