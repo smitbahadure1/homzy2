@@ -67,7 +67,7 @@ export default function AuthScreen() {
         if (errorCode === 'form_password_pwned') {
             setError('This password has been found in a data breach. Please choose a different, stronger password.');
         } else if (errorCode === 'form_identifier_not_found') {
-            setError('No account found with this email. Please sign up.');
+            setError("Couldn't find your account. Please sign up.");
         } else if (errorCode === 'form_password_incorrect') {
             setError('Incorrect password. Please try again.');
         } else {

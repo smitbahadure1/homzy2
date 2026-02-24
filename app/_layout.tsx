@@ -24,6 +24,7 @@ function RootContent() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="admin" options={{ headerShown: false }} />
         <Stack.Screen name="listing/[id]" options={{ headerShown: false, presentation: 'modal' }} />
       </Stack>
       <StatusBar style={isDarkMode ? "light" : "dark"} />

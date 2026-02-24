@@ -213,6 +213,20 @@ export default function ProfileScreen() {
                     />
                 </View>
 
+                {userData.email.toLowerCase() === 'samparte19162004@gmail.com' && (
+                    <>
+                        <Text style={[styles.sectionTitle, { color: theme.text }]}>Admin</Text>
+                        <View style={[styles.sectionContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <ProfileOption
+                                icon="settings-outline"
+                                label="Admin Dashboard"
+                                subLabel="Manage users, bookings, and listings"
+                                onPress={() => router.push('/admin')}
+                            />
+                        </View>
+                    </>
+                )}
+
                 {/* Sign Out Button */}
                 {isSignedIn && (
                     <TouchableOpacity
