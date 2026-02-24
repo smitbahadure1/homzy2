@@ -1,14 +1,15 @@
-
+import { ExploreCardSkeleton } from '@/components/Skeletons';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useTheme } from '@/context/ThemeContext';
-import { fetchRealEstateData, Property } from '@/services/realEstateService';
+import { fetchRealEstateData, Property, searchListings } from '@/services/realEstateService';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
-import { Dimensions, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Dimensions, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+const Haptics = require('expo-haptics');
+const useCallback = (React as any).useCallback;
 
 const { width } = Dimensions.get('window');
 
@@ -25,19 +26,89 @@ export default function ExploreScreen() {
   const { theme, isDarkMode } = useTheme();
   const { isFavorite, toggleFavorite } = useFavorites();
   const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadData();
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
   }, []);
+
 
   const loadData = async () => {
     setLoading(true);
-    const data = await fetchRealEstateData();
-    setProperties(data);
-    setLoading(false);
+    try {
+      const data = await fetchRealEstateData();
+      setProperties(data);
+    } catch (err) {
+      console.error('ExploreScreen: Error loading data', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!query.trim()) {
+      loadData();
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results = await searchListings(query);
+        setProperties(results);
+      } catch (err) {
+        console.error('ExploreScreen: Search failed', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 500);
+  }, []);
+
+  const handleDestinationPress = async (name: string) => {
+    if (searching) return;
+
+    if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    }
+    setSearchQuery(name);
+    setSearching(true);
+    try {
+      const results = await searchListings(name);
+      setProperties(results);
+    } catch (err) {
+      console.error('ExploreScreen: Destination search failed', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    setSearchQuery('');
+    loadData();
+  };
+
+  const renderSkeletons = () => (
+    <View style={styles.gridContainer}>
+      {[1, 2, 3, 4, 5, 6].map(i => (
+        <ExploreCardSkeleton key={i} />
+      ))}
+    </View>
+  );
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -58,8 +129,14 @@ export default function ExploreScreen() {
             style={[styles.searchInput, { color: theme.text }]}
             placeholderTextColor={theme.subText}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearch}
           />
+          {searching && <ActivityIndicator size="small" color={theme.subText} />}
+          {searchQuery.length > 0 && !searching && (
+            <TouchableOpacity onPress={clearSearch}>
+              <Ionicons name="close-circle" size={20} color={theme.subText} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Popular Destinations */}
@@ -70,65 +147,87 @@ export default function ExploreScreen() {
               <TouchableOpacity
                 key={dest.id}
                 style={styles.destCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  setSearchQuery(dest.name);
-                }}
+                onPress={() => handleDestinationPress(dest.name)}
               >
                 <Image source={{ uri: dest.image }} style={[styles.destImage, { borderColor: theme.border }]} />
-                {/* Removed overlay for cleaner look in light mode */}
                 <Text style={[styles.destName, { color: theme.text }]}>{dest.name}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
+        {/* Results Count */}
+        {!loading && (
+          <View style={styles.resultsBar}>
+            <Text style={[styles.resultsText, { color: theme.subText }]}>
+              {properties.length} {properties.length === 1 ? 'property' : 'properties'} found
+              {searchQuery ? ` for "${searchQuery}"` : ''}
+            </Text>
+          </View>
+        )}
+
         {/* Curated Listings Grid */}
         <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { color: theme.text }]}>Curated for you</Text>
-          <View style={styles.gridContainer}>
-            {properties.filter(item =>
-              item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              item.location.toLowerCase().includes(searchQuery.toLowerCase())
-            ).map((item, index) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.gridItem,
-                  index % 3 === 0 ? styles.gridItemFull : styles.gridItemHalf,
-                  { backgroundColor: theme.card, borderColor: theme.border }
-                ]}
-                activeOpacity={0.9}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  router.push({ pathname: '/listing/[id]', params: { ...item } });
-                }}
-              >
-                <Image
-                  source={typeof item.image === 'string' ? { uri: item.image } : item.image}
-                  style={styles.gridImage}
-                  resizeMode="cover"
-                />
-                <TouchableOpacity
-                  style={styles.favoriteBtn}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                    toggleFavorite(item);
-                  }}
-                >
-                  <Ionicons name={isFavorite(item.id) ? "heart" : "heart-outline"} size={20} color={isFavorite(item.id) ? "#FF385C" : "#FFF"} />
-                </TouchableOpacity>
-                <View style={styles.itemContent}>
-                  <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.itemLocation} numberOfLines={1}>{item.location}</Text>
-                  <View style={styles.priceRow}>
-                    <Text style={styles.itemPrice}>{item.price}</Text>
-                    <Text style={styles.itemPriceSuffix}>/night</Text>
-                  </View>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            {searchQuery ? 'Search Results' : 'Curated for you'}
+          </Text>
+
+          {loading ? renderSkeletons() : (
+            <View style={styles.gridContainer}>
+              {properties.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="search-outline" size={48} color={theme.subText} />
+                  <Text style={[styles.emptyTitle, { color: theme.text }]}>No results found</Text>
+                  <Text style={[styles.emptySubtext, { color: theme.subText }]}>
+                    Try different keywords or browse all destinations
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+              ) : (
+                properties.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.gridItem,
+                      index % 3 === 0 ? styles.gridItemFull : styles.gridItemHalf,
+                      { backgroundColor: theme.card, borderColor: theme.border }
+                    ]}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                      }
+                      router.push({ pathname: '/listing/[id]', params: { id: item.id, title: item.title, location: item.location, price: item.price, image: item.image, rating: String(item.rating), beds: String(item.beds), baths: String(item.baths), sqft: String(item.sqft), frequency: item.frequency || 'night' } });
+                    }}
+                  >
+                    <Image
+                      source={typeof item.image === 'string' ? { uri: item.image } : item.image}
+                      style={styles.gridImage}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={styles.favoriteBtn}
+                      onPress={() => {
+                        if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                        }
+                        toggleFavorite(item);
+                      }}
+                    >
+                      <Ionicons name={isFavorite(item.id) ? "heart" : "heart-outline"} size={20} color={isFavorite(item.id) ? "#FF385C" : "#FFF"} />
+                    </TouchableOpacity>
+                    <View style={styles.itemContent}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.itemLocation} numberOfLines={1}>{item.location}</Text>
+                      <View style={styles.priceRow}>
+                        <Text style={styles.itemPrice}>{item.price}</Text>
+                        <Text style={styles.itemPriceSuffix}>/{item.frequency || 'night'}</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
         </View>
 
         <View style={{ height: 100 }} />
@@ -195,16 +294,19 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     borderWidth: 2,
   },
-  destOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-  },
   destName: {
     marginTop: 8,
     color: '#CCC',
     fontSize: 14,
     fontWeight: '500',
+  },
+  resultsBar: {
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  resultsText: {
+    fontSize: 13,
+    fontStyle: 'italic',
   },
   gridContainer: {
     flexDirection: 'row',
@@ -271,5 +373,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 2,
     marginBottom: 2,
+  },
+  emptyState: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    marginTop: 6,
+    textAlign: 'center',
   },
 });

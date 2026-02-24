@@ -1,12 +1,12 @@
-
+import { FavoriteRowSkeleton } from '@/components/Skeletons';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { Dimensions, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Dimensions, FlatList, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+const Haptics = require('expo-haptics');
 
 import { useFavorites } from '@/context/FavoritesContext';
 
@@ -15,73 +15,120 @@ const { width } = Dimensions.get('window');
 export default function FavoriteScreen() {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
-    const { favorites } = useFavorites();
+    const { favorites, loading, refreshFavorites, toggleFavorite } = useFavorites();
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setIsRefreshing(true);
+        await refreshFavorites();
+        setIsRefreshing(false);
+    };
 
     const renderItem = ({ item }: { item: any }) => (
         <TouchableOpacity
-            activeOpacity={0.7}
-            style={[styles.favRow, { backgroundColor: theme.card, borderColor: theme.border }]}
+            style={[styles.favoriteItem, { backgroundColor: theme.card, borderColor: theme.border }]}
             onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                router.push({ pathname: '/listing/[id]', params: { ...item } });
+                if (Haptics && Haptics.impactAsync) {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+                router.push({
+                    pathname: '/listing/[id]',
+                    params: {
+                        id: item.id,
+                        title: item.title,
+                        location: item.location,
+                        price: item.price,
+                        image: item.image,
+                        rating: String(item.rating),
+                        beds: String(item.beds),
+                        baths: String(item.baths),
+                        sqft: String(item.sqft),
+                        frequency: item.frequency || 'night'
+                    }
+                });
             }}
         >
-            <Image source={{ uri: item.image }} style={styles.rowImage} resizeMode="cover" />
-
-            <View style={styles.rowContent}>
-                <View style={styles.titleRow}>
-                    <Text style={[styles.rowTitle, { color: theme.text }]} numberOfLines={1}>{item.title}</Text>
-                    <Ionicons name="heart" size={20} color="#FF3B30" />
+            <Image source={typeof item.image === 'string' ? { uri: item.image } : item.image} style={styles.itemImage} />
+            <View style={styles.itemInfo}>
+                <View style={styles.itemHeader}>
+                    <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>{item.title}</Text>
+                    <TouchableOpacity
+                        onPress={() => {
+                            if (Haptics && Haptics.impactAsync) {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                            }
+                            toggleFavorite(item);
+                        }}
+                        style={styles.heartButton}
+                    >
+                        <Ionicons name="heart" size={20} color="#FF385C" />
+                    </TouchableOpacity>
                 </View>
-
-                <Text style={[styles.rowLocation, { color: theme.subText }]} numberOfLines={1}>{item.location}</Text>
-
-                <View style={styles.rowFooter}>
-                    <Text style={[styles.rowPrice, { color: theme.text }]}>{item.price}</Text>
-                    <View style={styles.ratingBadge}>
-                        <Ionicons name="star" size={10} color="#000" />
-                        <Text style={styles.ratingText}>{item.rating}</Text>
+                <Text style={[styles.itemLocation, { color: theme.subText }]} numberOfLines={1}>{item.location}</Text>
+                <View style={styles.itemFooter}>
+                    <View style={styles.priceRow}>
+                        <Text style={[styles.itemPrice, { color: theme.text }]}>{item.price}</Text>
+                        <Text style={[styles.itemFrequency, { color: theme.subText }]}>/{item.frequency || 'night'}</Text>
+                    </View>
+                    <View style={styles.ratingRow}>
+                        <Ionicons name="star" size={12} color="#FFD700" />
+                        <Text style={[styles.ratingText, { color: theme.text }]}>{item.rating}</Text>
                     </View>
                 </View>
             </View>
         </TouchableOpacity>
     );
 
+    if (loading && !isRefreshing) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+                <StatusBar style={isDarkMode ? "light" : "dark"} />
+                <View style={styles.header}>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Favorites</Text>
+                </View>
+                <ScrollView contentContainerStyle={styles.listContent}>
+                    {[1, 2, 3, 4, 5].map(i => <FavoriteRowSkeleton key={i} />)}
+                </ScrollView>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
             <StatusBar style={isDarkMode ? "light" : "dark"} />
-
             <View style={styles.header}>
                 <Text style={[styles.headerTitle, { color: theme.text }]}>Favorites</Text>
-                {favorites.length > 0 && (
-                    <TouchableOpacity
-                        style={[styles.editButton, { backgroundColor: theme.card, borderColor: theme.border }]}
-                        onPress={() => {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                        }}
-                    >
-                        <Text style={[styles.editText, { color: theme.text }]}>Edit</Text>
-                    </TouchableOpacity>
-                )}
             </View>
 
-            {favorites.length > 0 ? (
-                <FlatList
-                    data={favorites}
-                    renderItem={renderItem}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={styles.listContainer}
-                    ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
-                    showsVerticalScrollIndicator={false}
-                />
-            ) : (
-                <View style={styles.emptyState}>
-                    <Ionicons name="heart-dislike-outline" size={64} color={theme.subText} />
-                    <Text style={[styles.emptyTitle, { color: theme.text }]}>No Favorites Yet</Text>
-                    <Text style={[styles.emptySubtitle, { color: theme.subText }]}>Start exploring and save your dream homes!</Text>
-                </View>
-            )}
-
+            <FlatList
+                data={favorites}
+                renderItem={renderItem}
+                keyExtractor={(item) => String(item.id)}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.text}
+                        colors={[theme.text]}
+                    />
+                }
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="heart-outline" size={64} color={theme.subText} />
+                        <Text style={[styles.emptyTitle, { color: theme.text }]}>No favorites yet</Text>
+                        <Text style={[styles.emptySubtitle, { color: theme.subText }]}>
+                            Tap the heart icon on any property to save it here.
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.exploreButton, { backgroundColor: theme.text }]}
+                            onPress={() => router.push('/(tabs)/explore')}
+                        >
+                            <Text style={[styles.exploreButtonText, { color: theme.bg }]}>Explore Properties</Text>
+                        </TouchableOpacity>
+                    </View>
+                }
+            />
         </SafeAreaView>
     );
 }
@@ -91,103 +138,114 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         paddingHorizontal: 20,
-        marginVertical: 10,
-        marginBottom: 20,
+        paddingVertical: 15,
     },
     headerTitle: {
         fontSize: 28,
         fontWeight: 'bold',
     },
-    listContainer: {
+    listContent: {
         paddingHorizontal: 20,
+        paddingBottom: 100,
     },
-    favRow: {
+    favoriteItem: {
         flexDirection: 'row',
-        paddingVertical: 12,
+        borderRadius: 16,
+        marginBottom: 16,
+        padding: 12,
+        borderWidth: 1,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    itemImage: {
+        width: 100,
+        height: 100,
+        borderRadius: 12,
+    },
+    itemInfo: {
+        flex: 1,
+        marginLeft: 15,
+        justifyContent: 'space-between',
+    },
+    itemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
     },
-    rowImage: {
-        width: 90,
-        height: 90,
-        borderRadius: 16,
-        backgroundColor: '#1A1A1A',
-        marginRight: 16,
-    },
-    rowContent: {
-        flex: 1,
-        // marginLeft: 16, // moved to rowImage marginRight to fix spacing
-        height: 90,
-        justifyContent: 'space-between',
-        paddingVertical: 4,
-    },
-    titleRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-    },
-    rowTitle: {
+    itemTitle: {
         fontSize: 16,
         fontWeight: 'bold',
         flex: 1,
         marginRight: 10,
     },
-    rowLocation: {
-        fontSize: 14,
+    heartButton: {
+        padding: 4,
     },
-    rowFooter: {
+    itemLocation: {
+        fontSize: 14,
+        marginTop: 2,
+    },
+    itemFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        marginTop: 8,
     },
-    rowPrice: {
-        fontSize: 16,
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+    },
+    itemPrice: {
+        fontSize: 15,
         fontWeight: 'bold',
     },
-    ratingBadge: {
+    itemFrequency: {
+        fontSize: 12,
+        marginLeft: 2,
+        marginBottom: 1,
+    },
+    ratingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#FFF',
+        backgroundColor: 'rgba(0,0,0,0.05)',
         paddingHorizontal: 6,
         paddingVertical: 2,
         borderRadius: 6,
-        gap: 4,
     },
     ratingText: {
-        color: '#000',
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: 'bold',
+        marginLeft: 3,
     },
-    separator: {
-        height: 1,
-        width: '100%',
-        marginVertical: 12, // Added margin for visual separation if used as ItemSeparator
-    },
-    editButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 12,
-        borderWidth: 1,
-    },
-    editText: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    emptyState: {
+    emptyContainer: {
         flex: 1,
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 100,
     },
     emptyTitle: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        marginTop: 16,
-        marginBottom: 8,
+        marginTop: 20,
     },
     emptySubtitle: {
-        fontSize: 14,
+        fontSize: 16,
+        textAlign: 'center',
+        marginTop: 10,
+        paddingHorizontal: 40,
+    },
+    exploreButton: {
+        marginTop: 30,
+        paddingHorizontal: 25,
+        paddingVertical: 12,
+        borderRadius: 25,
+    },
+    exploreButtonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });

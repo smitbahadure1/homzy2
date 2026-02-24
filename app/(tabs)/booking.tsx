@@ -1,130 +1,189 @@
-
+import { BookingCardSkeleton } from '@/components/Skeletons';
 import { useBookings } from '@/context/BookingsContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const Haptics = require('expo-haptics');
 
 export default function BookingScreen() {
     const router = useRouter();
     const { theme, isDarkMode } = useTheme();
-    const { bookings, cancelBooking } = useBookings();
+    const { bookings, loading, refreshBookings, cancelBooking } = useBookings();
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const upcomingTrips = bookings.filter(b => b.status === 'Upcoming');
-    const pastTrips = bookings.filter(b => b.status !== 'Upcoming');
+    const onRefresh = async () => {
+        setIsRefreshing(true);
+        try {
+            await refreshBookings();
+        } catch (err) {
+            console.error('BookingScreen: Refresh failed', err);
+        } finally {
+            setIsRefreshing(false);
+        }
+    };
+
+    const handleCancelBooking = async (id: string, title: string) => {
+        Alert.alert(
+            "Cancel Booking",
+            `Are you sure you want to cancel your booking for ${title}?`,
+            [
+                { text: "Keep Booking", style: "cancel" },
+                {
+                    text: "Cancel Booking",
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            const success = await cancelBooking(id);
+                            if (success) {
+                                if (Haptics && Haptics.impactAsync) {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                }
+                                Alert.alert("Success", "Your booking has been cancelled.");
+                            } else {
+                                Alert.alert("Error", "Could not cancel booking. Please try again later.");
+                            }
+                        } catch (err) {
+                            Alert.alert("Error", "Something went wrong.");
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    const getStatusStyles = (status: string) => {
+        switch (status) {
+            case 'Upcoming':
+                return { bg: '#E3F2FD', text: '#1976D2' };
+            case 'Completed':
+                return { bg: '#E8F5E9', text: '#388E3C' };
+            case 'Cancelled':
+                return { bg: '#FFEBEE', text: '#D32F2F' };
+            default:
+                return { bg: theme.border, text: theme.subText };
+        }
+    };
+
+    if (loading && !isRefreshing) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+                <StatusBar style={isDarkMode ? "light" : "dark"} />
+                <View style={styles.header}>
+                    <Text style={[styles.headerTitle, { color: theme.text }]}>Bookings</Text>
+                </View>
+                <ScrollView contentContainerStyle={styles.listContainer}>
+                    {[1, 2, 3].map(i => <BookingCardSkeleton key={`skel-${i}`} />)}
+                </ScrollView>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
             <StatusBar style={isDarkMode ? "light" : "dark"} />
-            <View style={[styles.header, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.headerTitle, { color: theme.text }]}>Trips</Text>
+            <View style={styles.header}>
+                <Text style={[styles.headerTitle, { color: theme.text }]}>My Trips</Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-                {upcomingTrips.length === 0 ? (
+            <ScrollView
+                contentContainerStyle={styles.listContainer}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        tintColor={theme.text}
+                    />
+                }
+            >
+                {bookings.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <View style={[styles.emptyIconContainer, { backgroundColor: theme.card }]}>
-                            <Ionicons name="airplane-outline" size={32} color={theme.icon} />
-                        </View>
+                        <Ionicons name="airplane-outline" size={80} color={theme.subText} />
                         <Text style={[styles.emptyTitle, { color: theme.text }]}>No trips booked... yet!</Text>
-                        <Text style={[styles.emptySubtitle, { color: theme.subText }]}>Time to dust off your bags and start planning your next adventure.</Text>
+                        <Text style={[styles.emptySubtitle, { color: theme.subText }]}>
+                            Time to dust off your bags and start planning your next adventure.
+                        </Text>
                         <TouchableOpacity
-                            style={[styles.startSearchingButton, { borderColor: theme.text }]}
-                            onPress={() => {
-                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                                router.push('/(tabs)/explore');
-                            }}
+                            style={[styles.exploreButton, { backgroundColor: theme.text }]}
+                            onPress={() => router.push('/(tabs)')}
                         >
-                            <Text style={[styles.startSearchingText, { color: theme.text }]}>Start searching</Text>
+                            <Text style={[styles.exploreButtonText, { color: theme.bg }]}>Start Exploring</Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: theme.text }]}>Upcoming reservations</Text>
-                        {upcomingTrips.map(trip => (
-                            <TouchableOpacity
+                    bookings.map((trip) => {
+                        const statusStyle = getStatusStyles(trip.status);
+                        const imageSource = trip.listing_image ? (typeof trip.listing_image === 'string' ? { uri: trip.listing_image } : trip.listing_image) : { uri: 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg' };
+
+                        return (
+                            <View
                                 key={trip.id}
                                 style={[styles.upcomingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-                                activeOpacity={0.9}
-                                onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                                    router.push({ pathname: '/listing/[id]', params: { ...trip } });
-                                }}
+                                {...({} as any)}
                             >
-                                <Image source={{ uri: trip.image }} style={styles.upcomingImage} />
-                                <View style={styles.upcomingContent}>
-                                    <View style={styles.upcomingRow}>
-                                        <Text style={[styles.upcomingLocation, { color: theme.text }]}>{trip.location}</Text>
-                                        <View style={styles.badge}>
-                                            <Text style={styles.badgeText}>Confirmed</Text>
+                                <Image source={imageSource} style={styles.cardImage} />
+                                <View style={styles.cardContent}>
+                                    <View style={styles.cardHeader}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[styles.cardTitle, { color: theme.text }]} numberOfLines={1}>{trip.listing_title}</Text>
+                                            <Text style={[styles.cardLocation, { color: theme.subText }]}>{trip.listing_location}</Text>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                                            <Text style={[styles.statusText, { color: statusStyle.text }]}>{trip.status}</Text>
                                         </View>
                                     </View>
-                                    <Text style={[styles.upcomingTitle, { color: theme.text }]}>{trip.title}</Text>
-                                    <Text style={[styles.upcomingDate, { color: theme.subText }]}>{trip.date}</Text>
 
                                     <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-                                    <View style={styles.upcomingActions}>
-                                        <TouchableOpacity
-                                            style={styles.actionBtn}
-                                            onPress={() => router.push({ pathname: '/listing/[id]', params: { ...trip } })}
-                                        >
-                                            <Text style={[styles.actionBtnText, { color: theme.text }]}>Show details</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={styles.actionBtn}
-                                            onPress={() => {
-                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                                                Alert.alert(
-                                                    "Cancel Reservation",
-                                                    "Are you sure you want to cancel this trip?",
-                                                    [
-                                                        { text: "No", style: "cancel" },
-                                                        { text: "Yes, Cancel", style: 'destructive', onPress: () => cancelBooking(trip.id) }
-                                                    ]
-                                                );
-                                            }}
-                                        >
-                                            <Text style={[styles.actionBtnText, { color: '#FF385C' }]}>Cancel</Text>
-                                        </TouchableOpacity>
+                                    <View style={styles.tripDetails}>
+                                        <View style={styles.detailItem}>
+                                            <Ionicons name="calendar-outline" size={16} color={theme.subText} />
+                                            <Text style={[styles.detailText, { color: theme.text }]}>{trip.check_in_date} - {trip.check_out_date}</Text>
+                                        </View>
+                                        <View style={styles.detailItem}>
+                                            <Ionicons name="people-outline" size={16} color={theme.subText} />
+                                            <Text style={[styles.detailText, { color: theme.text }]}>{trip.guests} {trip.guests === 1 ? 'Guest' : 'Guests'}</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+                                    <View style={styles.cardFooter}>
+                                        <View>
+                                            <Text style={[styles.totalLabel, { color: theme.subText }]}>Total Paid</Text>
+                                            <Text style={[styles.totalPrice, { color: theme.text }]}>₹ {trip.total_price?.toLocaleString()}</Text>
+                                        </View>
+                                        <View style={styles.actionButtons}>
+                                            {trip.status === 'Upcoming' && (
+                                                <TouchableOpacity
+                                                    style={[styles.cancelButton, { borderColor: theme.border }]}
+                                                    onPress={() => handleCancelBooking(trip.id, trip.listing_title)}
+                                                >
+                                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                                </TouchableOpacity>
+                                            )}
+                                            <TouchableOpacity
+                                                style={[styles.detailsButton, { backgroundColor: theme.text }]}
+                                                onPress={() => {
+                                                    if (Haptics && Haptics.impactAsync) {
+                                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                    }
+                                                    router.push(`/listing/${trip.listing_id}`);
+                                                }}
+                                            >
+                                                <Text style={[styles.detailsButtonText, { color: theme.bg }]}>View Details</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
                                 </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                            </View>
+                        );
+                    })
                 )}
-
-                {pastTrips.length > 0 && (
-                    <View style={[styles.section, { marginTop: 32 }]}>
-                        <Text style={[styles.sectionTitle, { color: theme.text }]}>Where you've been</Text>
-                        {pastTrips.map(trip => (
-                            <TouchableOpacity
-                                key={trip.id}
-                                style={[styles.pastCard, { backgroundColor: theme.inputBg }]}
-                                onPress={() => router.push({ pathname: '/listing/[id]', params: { ...trip } })}
-                            >
-                                <Image source={{ uri: trip.image }} style={styles.pastImage} />
-                                <View style={styles.pastContent}>
-                                    <Text style={[styles.pastLocation, { color: theme.text }]}>{trip.location}</Text>
-                                    <Text style={[styles.pastTitle, { color: theme.subText }]}>{trip.title}</Text>
-                                    <Text style={[styles.pastDate, { color: theme.subText }]}>{trip.date}</Text>
-                                </View>
-                                <View style={styles.pastStatus}>
-                                    <Text style={[styles.pastStatusText, trip.status === 'Cancelled' && { color: '#FF5A5F' }]}>
-                                        {trip.status}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                )}
-
                 <View style={{ height: 100 }} />
             </ScrollView>
         </SafeAreaView>
@@ -136,156 +195,138 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        paddingHorizontal: 24,
-        paddingTop: 16,
-        paddingBottom: 24,
-        borderBottomWidth: 1,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
     },
     headerTitle: {
         fontSize: 32,
         fontWeight: 'bold',
     },
-    scrollContent: {
-        padding: 24,
+    listContainer: {
+        paddingHorizontal: 20,
     },
-    section: {
-        marginBottom: 8,
-    },
-    sectionTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 20,
-    },
-    // Upcoming Card
     upcomingCard: {
-        borderRadius: 16,
+        borderRadius: 20,
         overflow: 'hidden',
         marginBottom: 24,
         borderWidth: 1,
+        elevation: 3,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 8,
-        elevation: 5,
     },
-    upcomingImage: {
+    cardImage: {
         width: '100%',
         height: 180,
     },
-    upcomingContent: {
+    cardContent: {
         padding: 20,
     },
-    upcomingRow: {
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
+        alignItems: 'flex-start',
+        marginBottom: 15,
     },
-    upcomingLocation: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    badge: {
-        backgroundColor: '#FFF',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    badgeText: {
-        fontSize: 10,
-        fontWeight: 'bold',
-        color: '#000',
-    },
-    upcomingTitle: {
-        fontSize: 20,
+    cardTitle: {
+        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
     },
-    upcomingDate: {
+    cardLocation: {
         fontSize: 14,
+    },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    statusText: {
+        fontSize: 12,
+        fontWeight: 'bold',
     },
     divider: {
         height: 1,
-        marginVertical: 16,
+        width: '100%',
+        marginVertical: 15,
     },
-    upcomingActions: {
+    tripDetails: {
         flexDirection: 'row',
         gap: 20,
     },
-    actionBtn: {
-
-    },
-    actionBtnText: {
-        fontSize: 14,
-        fontWeight: '600',
-        textDecorationLine: 'underline',
-    },
-    // Past Card
-    pastCard: {
+    detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
-        borderRadius: 12,
-        padding: 12,
+        gap: 8,
     },
-    pastImage: {
-        width: 60,
-        height: 60,
-        borderRadius: 8,
-        marginRight: 16,
-    },
-    pastContent: {
-        flex: 1,
-    },
-    pastLocation: {
+    detailText: {
         fontSize: 14,
+        fontWeight: '500',
+    },
+    cardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+    },
+    totalLabel: {
+        fontSize: 12,
+        marginBottom: 2,
+    },
+    totalPrice: {
+        fontSize: 18,
         fontWeight: 'bold',
     },
-    pastTitle: {
-        fontSize: 12,
-        marginVertical: 2,
+    actionButtons: {
+        flexDirection: 'row',
+        gap: 10,
     },
-    pastDate: {
-        fontSize: 12,
+    cancelButton: {
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
     },
-    pastStatus: {
-        marginLeft: 8,
+    cancelButtonText: {
+        color: '#FF385C',
+        fontSize: 14,
+        fontWeight: '600',
     },
-    pastStatusText: {
-        fontSize: 12,
-        color: '#AAA',
+    detailsButton: {
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 10,
     },
-    // Empty State
+    detailsButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+    },
     emptyState: {
-        marginTop: 40,
-        alignItems: 'flex-start',
-    },
-    emptyIconContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        justifyContent: 'center',
+        flex: 1,
         alignItems: 'center',
-        marginBottom: 20,
+        justifyContent: 'center',
+        paddingVertical: 80,
     },
     emptyTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: 'bold',
-        marginBottom: 12,
+        marginTop: 20,
     },
     emptySubtitle: {
         fontSize: 16,
-        marginBottom: 32,
-        lineHeight: 24,
+        textAlign: 'center',
+        marginTop: 10,
+        paddingHorizontal: 40,
+        lineHeight: 22,
     },
-    startSearchingButton: {
-        paddingVertical: 14,
-        paddingHorizontal: 28,
-        borderRadius: 8,
-        borderWidth: 1,
+    exploreButton: {
+        marginTop: 30,
+        paddingHorizontal: 30,
+        paddingVertical: 15,
+        borderRadius: 30,
     },
-    startSearchingText: {
+    exploreButtonText: {
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: 'bold',
     },
 });

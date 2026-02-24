@@ -4,12 +4,19 @@ import { useBookings } from '@/context/BookingsContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Image, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Dimensions, Image, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const useCallback = (React as any).useCallback;
+let Haptics: any = null;
+try {
+    Haptics = require('expo-haptics');
+} catch (e) {
+    console.warn('ListingDetail: expo-haptics not found');
+}
 
 const { width, height } = Dimensions.get('window');
 
@@ -90,6 +97,7 @@ export default function ListingDetailScreen() {
     const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi'>('card');
     const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', type: 'error' });
     const [guestCount, setGuestCount] = useState(1);
+    const [submitting, setSubmitting] = useState(false);
     const dateInputRef = useRef<TextInput>(null);
     const [formData, setFormData] = useState({
         name: '',
@@ -99,6 +107,30 @@ export default function ListingDetailScreen() {
         date: ''
     });
 
+    const isMountedRef = useRef(true);
+    const bookingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (bookingTimeoutRef.current) clearTimeout(bookingTimeoutRef.current);
+        }
+    }, []);
+
+    const getImageSource = (img: any) => {
+        if (!img) return { uri: 'https://images.pexels.com/photos/106399/pexels-photo-106399.jpeg' };
+        if (typeof img === 'number') return img;
+        if (typeof img === 'string') {
+            if (img.startsWith('http')) return { uri: img };
+            // Handle numeric asset IDs passed as strings via params
+            const num = parseInt(img, 10);
+            if (!isNaN(num) && String(num) === img) return num;
+            return { uri: img };
+        }
+        return img;
+    };
+
     const handleDateEdit = () => {
         setShowCalendar(true);
     };
@@ -106,12 +138,30 @@ export default function ListingDetailScreen() {
 
 
     const handleBooking = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        }
         setStep(1);
         setBookingModalVisible(true);
     };
 
-    const submitBooking = () => {
+    const resetBookingState = () => {
+        setStep(1);
+        setFormData({
+            name: '',
+            phone: '',
+            email: '',
+            message: '',
+            date: ''
+        });
+        setStartDate(null);
+        setEndDate(null);
+        setNights(3);
+        setGuestCount(1);
+        setPaymentMethod('card');
+    };
+
+    const submitBooking = async () => {
         if (step === 1) {
             if (!startDate || !endDate) {
                 setCustomAlert({ visible: true, title: 'Select Dates', message: 'Please select both a Check-in and Check-out date.', type: 'error' });
@@ -123,22 +173,55 @@ export default function ListingDetailScreen() {
             }
             setStep(2);
         } else {
-            const newTrip = {
-                id: Date.now().toString(),
-                status: 'Upcoming',
-                image: mainImage,
-                location: String(location),
-                title: String(title),
-                date: startDate && endDate ? `Oct ${startDate} - Oct ${endDate}` : 'Dates TBD',
-                price: calculatedPrice,
-                guests: guestCount
-            };
-            addBooking(newTrip); // Fix type error by assuming newTrip matches Trip type or cast if needed. However context expects Trip.
+            setSubmitting(true);
+            try {
+                const bookingData = {
+                    listing_id: id ? String(id) : null,
+                    listing_title: String(title),
+                    listing_location: String(location),
+                    listing_image: mainImage,
+                    listing_price: priceVal,
+                    check_in_date: startDate && endDate ? `Oct ${startDate}` : 'TBD',
+                    check_out_date: startDate && endDate ? `Oct ${endDate}` : 'TBD',
+                    nights: calculatedNights,
+                    guests: guestCount,
+                    total_price: totalBookingPrice,
+                    cleaning_fee: cleaningFee,
+                    service_fee: serviceFee,
+                    status: 'Upcoming' as const,
+                    guest_name: formData.name,
+                    guest_email: formData.email,
+                    guest_phone: formData.phone,
+                    message_to_host: formData.message || null,
+                    payment_method: paymentMethod,
+                    updated_at: new Date().toISOString(),
+                };
 
-            setBookingModalVisible(false);
-            setTimeout(() => {
-                setCustomAlert({ visible: true, title: 'Booking Confirmed!', message: 'You are all set! Have a great trip.', type: 'success' });
-            }, 500);
+                const success = await addBooking(bookingData);
+
+                if (isMountedRef.current) {
+                    setBookingModalVisible(false);
+                }
+
+                bookingTimeoutRef.current = setTimeout(() => {
+                    if (!isMountedRef.current) return;
+
+                    resetBookingState();
+                    if (success) {
+                        setCustomAlert({ visible: true, title: 'Booking Confirmed!', message: 'You are all set! Have a great trip.', type: 'success' });
+                    } else {
+                        setCustomAlert({ visible: true, title: 'Booking Saved Locally', message: 'Your booking was saved. Sign in to sync across devices.', type: 'success' });
+                    }
+                }, 500);
+            } catch (err) {
+                if (isMountedRef.current) {
+                    setCustomAlert({ visible: true, title: 'Error', message: 'Something went wrong. Please try again.', type: 'error' });
+                }
+            } finally {
+                if (isMountedRef.current) {
+                    setSubmitting(false);
+                }
+            }
         }
     };
 
@@ -149,7 +232,9 @@ export default function ListingDetailScreen() {
     const isLiked = isFavorite(String(id));
 
     const handleShare = async () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        }
         try {
             await Share.share({
                 message: `Check out this amazing place in ${location}: ${title} for ${price}!`,
@@ -161,7 +246,9 @@ export default function ListingDetailScreen() {
     };
 
     const handleFavorite = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        if (Haptics?.impactAsync && Haptics?.ImpactFeedbackStyle?.Heavy != null) {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        }
         const propertyObj: any = {
             id: String(id),
             title: String(title),
@@ -225,7 +312,9 @@ export default function ListingDetailScreen() {
             {/* Nav Header */}
             <Animated.View style={[styles.navHeader, { paddingTop: insets.top + 10, transform: [{ translateY: headerTranslateY }] }]}>
                 <TouchableOpacity style={styles.iconBtn} onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    if (Haptics && Haptics.impactAsync) {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    }
                     router.back();
                 }}>
                     <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -258,8 +347,10 @@ export default function ListingDetailScreen() {
                         onScroll={handleScroll}
                         scrollEventThrottle={16}
                     >
-                        {GALLERY_IMAGES.map((img, index) => (
-                            <Image key={index} source={{ uri: img }} style={styles.carouselImage} resizeMode="cover" />
+                        {GALLERY_IMAGES.map((img, idx) => (
+                            <View key={`gallery-${idx}`} style={{ width }} {...({} as any)}>
+                                <Image source={getImageSource(img)} style={styles.carouselImage} resizeMode="cover" />
+                            </View>
                         ))}
                     </ScrollView>
                     <View style={styles.imageCounter}>
@@ -329,8 +420,8 @@ export default function ListingDetailScreen() {
                     {/* Amenities */}
                     <Text style={[styles.sectionHeader, { color: theme.text }]}>What this place offers</Text>
                     <View style={styles.amenitiesList}>
-                        {FACILITIES.slice(0, showAllAmenities ? FACILITIES.length : 5).map((item, index) => (
-                            <View key={index} style={styles.amenityRow}>
+                        {FACILITIES.slice(0, showAllAmenities ? FACILITIES.length : 5).map((item, idx) => (
+                            <View key={`facility-${idx}`} style={styles.amenityRow} {...({} as any)}>
                                 <Ionicons name={item.icon as any} size={24} color={theme.subText} />
                                 <Text style={[styles.amenityText, { color: theme.subText }]}>{item.label}</Text>
                             </View>
@@ -409,7 +500,7 @@ export default function ListingDetailScreen() {
                             <>
                                 {/* Property Snippet */}
                                 <View style={styles.propertySnippet}>
-                                    <Image source={{ uri: mainImage }} style={styles.snippetImage} />
+                                    <Image source={getImageSource(mainImage)} style={styles.snippetImage} />
                                     <View style={styles.snippetInfo}>
                                         <Text style={[styles.snippetTitle, { color: theme.text }]} numberOfLines={1}>{title}</Text>
                                         <Text style={[styles.snippetSub, { color: theme.subText }]}>{location}</Text>
@@ -450,7 +541,9 @@ export default function ListingDetailScreen() {
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                                         <TouchableOpacity
                                             onPress={() => {
-                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                if (Haptics && Haptics.impactAsync) {
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                }
                                                 setGuestCount(Math.max(1, guestCount - 1));
                                             }}
                                             style={[styles.counterBtn, { borderColor: theme.border, backgroundColor: theme.card, opacity: guestCount <= 1 ? 0.5 : 1 }]}
@@ -463,7 +556,9 @@ export default function ListingDetailScreen() {
 
                                         <TouchableOpacity
                                             onPress={() => {
-                                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                if (Haptics && Haptics.impactAsync) {
+                                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                                }
                                                 setGuestCount(Math.min(10, guestCount + 1));
                                             }}
                                             style={[styles.counterBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
@@ -544,7 +639,7 @@ export default function ListingDetailScreen() {
                             <>
                                 {/* Step 2: Payment UI */}
                                 <View style={styles.propertySnippet}>
-                                    <Image source={{ uri: mainImage }} style={styles.snippetImage} />
+                                    <Image source={getImageSource(mainImage)} style={styles.snippetImage} />
                                     <View style={styles.snippetInfo}>
                                         <Text style={[styles.snippetTitle, { color: theme.text }]} numberOfLines={1}>{title}</Text>
                                         <Text style={[styles.snippetSub, { color: theme.subText }]}>Total: {formatCurrency(totalBookingPrice)}</Text>
@@ -607,10 +702,18 @@ export default function ListingDetailScreen() {
 
                     {/* Sticky Footer */}
                     <View style={[styles.bookingFooter, { backgroundColor: theme.bg, borderTopColor: theme.border }]}>
-                        <TouchableOpacity style={[styles.confirmButton, { backgroundColor: theme.text }]} onPress={submitBooking}>
-                            <Text style={[styles.confirmButtonText, { color: theme.bg }]}>
-                                {step === 1 ? "Continue to Payment" : `Pay ${formatCurrency(totalBookingPrice)}`}
-                            </Text>
+                        <TouchableOpacity
+                            style={[styles.confirmButton, { backgroundColor: theme.text }, submitting && { opacity: 0.7 }]}
+                            onPress={submitBooking}
+                            disabled={submitting}
+                        >
+                            {submitting ? (
+                                <ActivityIndicator size="small" color={theme.bg} />
+                            ) : (
+                                <Text style={[styles.confirmButtonText, { color: theme.bg }]}>
+                                    {step === 1 ? "Continue to Payment" : `Pay ${formatCurrency(totalBookingPrice)}`}
+                                </Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -646,7 +749,7 @@ export default function ListingDetailScreen() {
                         <Text style={[styles.monthTitle, { color: theme.subText }]}>October 2024</Text>
                         <View style={styles.calendarGrid}>
                             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                                <Text key={d} style={styles.dayLabel}>{d}</Text>
+                                <Text key={`day-label-${d}`} style={styles.dayLabel} {...({} as any)}>{d}</Text>
                             ))}
                             {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
                                 const isSelected = day === startDate || day === endDate;
