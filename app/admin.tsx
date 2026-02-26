@@ -1,9 +1,12 @@
 import { useTheme } from '@/context/ThemeContext';
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/firebase';
+import { Booking, fetchAllBookings } from '@/services/bookingService';
 import { Property, fetchRealEstateData } from '@/services/realEstateService';
+import { UserProfile, fetchAllUsers } from '@/services/userService';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
+import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +17,8 @@ export default function AdminPanel() {
 
     const [loading, setLoading] = useState(true);
     const [listings, setListings] = useState<Property[]>([]);
+    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [bookings, setBookings] = useState<Booking[]>([]);
     const [activeTab, setActiveTab] = useState<'listings' | 'users' | 'bookings'>('listings');
 
     // Modal state for Add/Edit
@@ -32,13 +37,19 @@ export default function AdminPanel() {
     });
 
     useEffect(() => {
-        loadListings();
+        loadData();
     }, []);
 
-    const loadListings = async () => {
+    const loadData = async () => {
         setLoading(true);
-        const data = await fetchRealEstateData();
-        setListings(data);
+        const [listingsData, usersData, bookingsData] = await Promise.all([
+            fetchRealEstateData(),
+            fetchAllUsers(),
+            fetchAllBookings()
+        ]);
+        setListings(listingsData);
+        setUsers(usersData);
+        setBookings(bookingsData);
         setLoading(false);
     };
 
@@ -48,12 +59,12 @@ export default function AdminPanel() {
             {
                 text: 'Delete', style: 'destructive', onPress: async () => {
                     setLoading(true);
-                    const { error } = await supabase.from('listings').delete().eq('id', id);
-                    if (error) {
-                        Alert.alert('Error', error.message);
-                    } else {
+                    try {
+                        await deleteDoc(doc(db, 'listings', id));
                         Alert.alert('Success', 'Listing deleted.');
-                        await loadListings();
+                        await loadData();
+                    } catch (error: any) {
+                        Alert.alert('Error', error.message);
                     }
                     setLoading(false);
                 }
@@ -131,19 +142,17 @@ export default function AdminPanel() {
             rating: 4.5,
         };
 
-        let response;
-        if (isEditing) {
-            response = await supabase.from('listings').update(payload).eq('id', formData.id);
-        } else {
-            response = await supabase.from('listings').insert(payload);
-        }
-
-        if (response.error) {
-            Alert.alert('Error', response.error.message);
-        } else {
+        try {
+            if (isEditing) {
+                await updateDoc(doc(db, 'listings', formData.id), payload);
+            } else {
+                await addDoc(collection(db, 'listings'), payload);
+            }
             Alert.alert('Success', `Listing successfully ${isEditing ? 'updated' : 'added'}!`);
             setModalVisible(false);
-            await loadListings();
+            await loadData();
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
         }
         setLoading(false);
     };
@@ -154,7 +163,7 @@ export default function AdminPanel() {
                 <Ionicons name="chevron-back" size={24} color={theme.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: theme.text }]}>Admin Panel</Text>
-            <TouchableOpacity onPress={loadListings} style={styles.backBtn}>
+            <TouchableOpacity onPress={loadData} style={styles.backBtn}>
                 <Ionicons name="refresh" size={20} color={theme.text} />
             </TouchableOpacity>
         </View>
@@ -175,17 +184,6 @@ export default function AdminPanel() {
             ))}
         </View>
     );
-
-    const MOCK_USERS = [
-        { email: 'Samparte19162004@gmail.com', name: 'Admin', joined: 'Yesterday' },
-        { email: 'JohnDoe@example.com', name: 'John Doe', joined: 'Oct 12, 2024' },
-        { email: 'JaneSmith@example.com', name: 'Jane Smith', joined: 'Oct 10, 2024' },
-    ];
-
-    const MOCK_BOOKINGS = [
-        { user: 'JohnDoe@example.com', listing: 'Luxury Villa with Infinity Pool', dates: 'Nov 12 - 17' },
-        { user: 'JaneSmith@example.com', listing: 'Beachfront Bungalow with View', dates: 'Dec 1 - 5' },
-    ];
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -226,25 +224,33 @@ export default function AdminPanel() {
 
                     {activeTab === 'users' && (
                         <View>
-                            {MOCK_USERS.map((u, i) => (
-                                <View key={i} style={[styles.mockCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                                    <View style={styles.mockRow}><Ionicons name="person" size={16} color={theme.text} /><Text style={[styles.mockText, { color: theme.text }]}>{u.name}</Text></View>
-                                    <View style={styles.mockRow}><Ionicons name="mail" size={16} color={theme.subText} /><Text style={[styles.mockText, { color: theme.subText }]}>{u.email}</Text></View>
-                                    <Text style={[styles.mockSub, { color: theme.subText, alignSelf: 'flex-end' }]}>Joined: {u.joined}</Text>
-                                </View>
-                            ))}
+                            {users.length === 0 ? (
+                                <Text style={{ color: theme.subText, textAlign: 'center', marginTop: 20 }}>No users found.</Text>
+                            ) : (
+                                users.map((u, i) => (
+                                    <View key={u.id || i} style={[styles.mockCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                                        <View style={styles.mockRow}><Ionicons name="person" size={16} color={theme.text} /><Text style={[styles.mockText, { color: theme.text }]}>{u.firstName} {u.lastName}</Text></View>
+                                        <View style={styles.mockRow}><Ionicons name="mail" size={16} color={theme.subText} /><Text style={[styles.mockText, { color: theme.subText }]}>{u.email}</Text></View>
+                                        <Text style={[styles.mockSub, { color: theme.subText, alignSelf: 'flex-end' }]}>Joined: {u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Unknown'}</Text>
+                                    </View>
+                                ))
+                            )}
                         </View>
                     )}
 
                     {activeTab === 'bookings' && (
                         <View>
-                            {MOCK_BOOKINGS.map((b, i) => (
-                                <View key={i} style={[styles.mockCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                                    <View style={styles.mockRow}><Ionicons name="home" size={16} color={theme.text} /><Text style={[styles.mockText, { color: theme.text }]}>{b.listing}</Text></View>
-                                    <View style={styles.mockRow}><Ionicons name="person" size={16} color={theme.subText} /><Text style={[styles.mockText, { color: theme.subText }]}>{b.user}</Text></View>
-                                    <Text style={[styles.mockSub, { color: theme.text, alignSelf: 'flex-end', fontWeight: 'bold' }]}>{b.dates}</Text>
-                                </View>
-                            ))}
+                            {bookings.length === 0 ? (
+                                <Text style={{ color: theme.subText, textAlign: 'center', marginTop: 20 }}>No bookings found.</Text>
+                            ) : (
+                                bookings.map((b, i) => (
+                                    <View key={b.id || i} style={[styles.mockCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                                        <View style={styles.mockRow}><Ionicons name="home" size={16} color={theme.text} /><Text style={[styles.mockText, { color: theme.text }]}>{b.listing_title}</Text></View>
+                                        <View style={styles.mockRow}><Ionicons name="person" size={16} color={theme.subText} /><Text style={[styles.mockText, { color: theme.subText }]}>{b.guest_email || b.clerk_user_id}</Text></View>
+                                        <Text style={[styles.mockSub, { color: theme.text, alignSelf: 'flex-end', fontWeight: 'bold' }]}>{new Date(b.check_in_date).toLocaleDateString()} - {new Date(b.check_out_date).toLocaleDateString()}</Text>
+                                    </View>
+                                ))
+                            )}
                         </View>
                     )}
                 </ScrollView>

@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/firebase';
+import { addDoc, collection, getDocs, limit as limitDocs, orderBy, query, where } from 'firebase/firestore';
 
 export interface Review {
     id: string;
@@ -12,28 +13,22 @@ export interface Review {
 
 export const fetchReviewsForListing = async (
     listingId: string,
-    limit: number = 50,
+    limitNum: number = 50,
     offset: number = 0
 ): Promise<{ reviews: Review[]; total: number }> => {
-    if (limit <= 0) return { reviews: [], total: 0 };
-    const end = offset + limit - 1;
-
     try {
-        const { data, error, count } = await supabase
-            .from('reviews')
-            .select('id, listing_id, reviewer_name, reviewer_avatar, rating, comment, created_at', { count: 'exact' })
-            .eq('listing_id', listingId)
-            .order('created_at', { ascending: false })
-            .range(offset, end);
+        const q = query(
+            collection(db, 'reviews'),
+            where('listing_id', '==', listingId),
+            orderBy('created_at', 'desc'),
+            limitDocs(limitNum)
+        );
+        const snapshot = await getDocs(q);
 
-        if (error) {
-            console.error('Error fetching reviews:', error);
-            return { reviews: [], total: 0 };
-        }
-
-        return { reviews: data || [], total: count ?? 0 };
+        const reviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Review));
+        return { reviews, total: reviews.length };
     } catch (err) {
-        console.error('Unexpected error fetching reviews:', err);
+        console.error('Error fetching reviews:', err);
         return { reviews: [], total: 0 };
     }
 };
@@ -48,23 +43,26 @@ export const createReview = async (
     }
 
     try {
-        const { data, error } = await supabase
-            .from('reviews')
-            .insert({ ...review, clerk_user_id: clerkUserId })
-            .select('id, listing_id, reviewer_name, reviewer_avatar, rating, comment, created_at')
-            .single();
-
-        if (error) {
-            // Handle unique constraint violation (duplicate review)
-            if (error.code === '23505') {
-                console.error('Duplicate review: user already reviewed this listing');
-                return null;
-            }
-            console.error('Error creating review:', error);
+        // Enforce 1 review per user per listing
+        const checkQ = query(
+            collection(db, 'reviews'),
+            where('listing_id', '==', review.listing_id),
+            where('clerk_user_id', '==', clerkUserId)
+        );
+        const existing = await getDocs(checkQ);
+        if (!existing.empty) {
+            console.error('Duplicate review: user already reviewed this listing');
             return null;
         }
 
-        return data;
+        const payload = {
+            ...review,
+            clerk_user_id: clerkUserId,
+            created_at: new Date().toISOString()
+        };
+
+        const docRef = await addDoc(collection(db, 'reviews'), payload);
+        return { id: docRef.id, ...payload } as Review;
     } catch (err) {
         console.error('Unexpected error creating review:', err);
         return null;
@@ -73,24 +71,21 @@ export const createReview = async (
 
 export const fetchAverageRating = async (listingId: string): Promise<{ average: number; count: number }> => {
     try {
-        const { data, error } = await supabase
-            .from('reviews')
-            .select('rating')
-            .eq('listing_id', listingId);
+        const q = query(collection(db, 'reviews'), where('listing_id', '==', listingId));
+        const snapshot = await getDocs(q);
 
-        if (error) {
-            console.error('Error fetching average rating:', error);
+        if (snapshot.empty) {
             return { average: 0, count: 0 };
         }
 
-        if (!data || data.length === 0) {
-            return { average: 0, count: 0 };
-        }
+        let sum = 0;
+        snapshot.forEach(doc => {
+            sum += Number(doc.data().rating);
+        });
 
-        const sum = data.reduce((acc, r) => acc + Number(r.rating), 0);
-        return { average: parseFloat((sum / data.length).toFixed(1)), count: data.length };
+        return { average: parseFloat((sum / snapshot.size).toFixed(1)), count: snapshot.size };
     } catch (err) {
-        console.error('Unexpected error fetching average rating:', err);
+        console.error('Error fetching average rating:', err);
         return { average: 0, count: 0 };
     }
 };

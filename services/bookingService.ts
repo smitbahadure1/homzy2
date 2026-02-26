@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/firebase';
+import { addDoc, collection, doc, getDocs, orderBy, query, updateDoc, where } from 'firebase/firestore';
 
 export interface Booking {
     id: string;
@@ -26,64 +27,61 @@ export interface Booking {
 
 export const fetchUserBookings = async (clerkUserId: string): Promise<Booking[]> => {
     try {
-        const { data, error } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('clerk_user_id', clerkUserId)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching bookings:', error);
-            return [];
-        }
-
-        return data || [];
+        const q = query(
+            collection(db, 'bookings'),
+            where('clerk_user_id', '==', clerkUserId),
+            orderBy('created_at', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
     } catch (err) {
-        console.error('Unexpected error fetching bookings:', err);
+        console.error('Error fetching bookings:', err);
         return [];
     }
 };
 
 export const createBooking = async (booking: Omit<Booking, 'id' | 'created_at'>): Promise<Booking | null> => {
     try {
-        // Always force status to Upcoming for new bookings
-        const payload = { ...booking, status: 'Upcoming' };
-
-        const { data, error } = await supabase
-            .from('bookings')
-            .insert(payload)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('Error creating booking:', error);
-            return null;
-        }
-
-        return data;
+        const payload = {
+            ...booking,
+            status: 'Upcoming',
+            created_at: new Date().toISOString()
+        };
+        const docRef = await addDoc(collection(db, 'bookings'), payload);
+        return {
+            id: docRef.id,
+            ...payload
+        } as Booking;
     } catch (err) {
-        console.error('Unexpected error creating booking:', err);
+        console.error('Error creating booking:', err);
         return null;
     }
 };
 
 export const cancelBooking = async (bookingId: string, clerkUserId: string): Promise<boolean> => {
     try {
-        const { data, error } = await supabase
-            .from('bookings')
-            .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
-            .eq('id', bookingId)
-            .eq('clerk_user_id', clerkUserId)
-            .select('id');
-
-        if (error) {
-            console.error('Error cancelling booking:', error);
-            return false;
-        }
-
-        return !!(data && data.length > 0);
+        const docRef = doc(db, 'bookings', bookingId);
+        await updateDoc(docRef, {
+            status: 'Cancelled',
+            updated_at: new Date().toISOString()
+        });
+        return true;
     } catch (err) {
-        console.error('Unexpected error cancelling booking:', err);
+        console.error('Error cancelling booking:', err);
         return false;
+    }
+};
+
+export const fetchAllBookings = async (): Promise<Booking[]> => {
+    try {
+        const q = query(
+            collection(db, 'bookings'),
+            orderBy('created_at', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+    } catch (err) {
+        console.error('Error fetching all bookings:', err);
+        return [];
     }
 };

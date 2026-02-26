@@ -1,5 +1,6 @@
 
 import { useTheme } from '@/context/ThemeContext';
+import { checkIsAdminDb } from '@/services/userService';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -23,17 +24,26 @@ export default function ProfileScreen() {
         email: 'Sign in to access your profile',
         phone: '',
         bio: 'Love traveling and exploring new places.',
-        image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800'
+        image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
+        isAdmin: false
     });
 
     useEffect(() => {
         if (isSignedIn && user) {
+            const emailAddress = user.primaryEmailAddress?.emailAddress || '';
             setUserData({
                 name: user.fullName || user.firstName || 'User',
-                email: user.primaryEmailAddress?.emailAddress || '',
+                email: emailAddress,
                 phone: user.primaryPhoneNumber?.phoneNumber || '',
                 bio: 'Love traveling and exploring new places.',
-                image: user.imageUrl || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800'
+                image: user.imageUrl || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
+                isAdmin: false
+            });
+
+            checkIsAdminDb(emailAddress).then(isAdmin => {
+                if (isAdmin) {
+                    setUserData(prev => ({ ...prev, isAdmin: true }));
+                }
             });
         } else {
             setUserData({
@@ -41,7 +51,8 @@ export default function ProfileScreen() {
                 email: 'Sign in to access your profile',
                 phone: '',
                 bio: 'Love traveling and exploring new places.',
-                image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800'
+                image: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=800',
+                isAdmin: false
             });
         }
     }, [isSignedIn, user]);
@@ -213,7 +224,7 @@ export default function ProfileScreen() {
                     />
                 </View>
 
-                {userData.email.toLowerCase() === 'samparte19162004@gmail.com' && (
+                {userData.isAdmin && (
                     <>
                         <Text style={[styles.sectionTitle, { color: theme.text }]}>Admin</Text>
                         <View style={[styles.sectionContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>

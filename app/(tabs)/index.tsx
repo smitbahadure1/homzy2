@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   Image,
@@ -85,8 +86,9 @@ export default function HomeScreen() {
     try {
       const results = await searchListings('');
       setAllProperties(results);
-    } catch (err) {
+    } catch (err: any) {
       console.error('HomeScreen: Error loading data', err);
+      Alert.alert('Data Error', err?.message || 'Failed to load properties');
     } finally {
       if (showInitialLoading) setLoading(false);
     }

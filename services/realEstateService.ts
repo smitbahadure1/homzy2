@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { db } from '@/lib/firebase';
+import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
 
 export interface Property {
     id: string;
@@ -24,7 +25,11 @@ export interface Property {
 
 // Helper to format price to INR
 const formatPrice = (price: number) => {
-    return `₹ ${price.toLocaleString('en-IN')}`;
+    try {
+        return `₹ ${price.toLocaleString('en-IN')}`;
+    } catch {
+        return `₹ ${price.toString()}`;
+    }
 };
 
 // Simple deterministic hash from string for stable pseudo-random values
@@ -37,16 +42,8 @@ const hashCode = (str: string): number => {
     return Math.abs(hash);
 };
 
-// Sanitize user input for PostgREST filter expressions
-const sanitizeFilterValue = (value: string): string => {
-    return value
-        .replace(/\\/g, '\\\\')
-        .replace(/_/g, '\\_')
-        .replace(/[,()%]/g, '');
-};
-
-const mapListingToProperty = (item: any): Property => ({
-    id: item.id,
+const mapListingToProperty = (item: any, id: string): Property => ({
+    id: id,
     title: item.title,
     location: item.location,
     price: formatPrice(item.price),
@@ -62,99 +59,77 @@ const mapListingToProperty = (item: any): Property => ({
     is_superhost: item.is_superhost ?? false,
     max_guests: item.max_guests ?? 4,
     amenities: item.amenities ?? ['wifi', 'parking', 'kitchen', 'ac'],
-    distance: `${50 + (hashCode(item.id) % 400)} km away`,
+    distance: `${50 + (hashCode(id) % 400)} km away`,
     dates: item.dates ?? undefined,
     frequency: 'night'
 });
 
 export const fetchRealEstateData = async (): Promise<Property[]> => {
     try {
-        const { data, error } = await supabase
-            .from('listings')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching listings:', error);
-            throw error;
-        }
-
-        if (!data) return [];
-        return data.map(mapListingToProperty);
+        const q = query(collection(db, 'listings'), orderBy('created_at', 'desc'));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => mapListingToProperty(doc.data(), doc.id));
     } catch (err) {
-        console.error('Unexpected error:', err);
+        console.error('Error fetching listings:', err);
         return [];
     }
 };
 
 export const fetchListingById = async (id: string): Promise<Property | null> => {
     try {
-        const { data, error } = await supabase
-            .from('listings')
-            .select('*')
-            .eq('id', id)
-            .single();
-
-        if (error) {
-            console.error('Error fetching listing:', error);
-            return null;
+        const docRef = doc(db, 'listings', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return mapListingToProperty(docSnap.data(), docSnap.id);
         }
-        return data ? mapListingToProperty(data) : null;
+        return null;
     } catch (err) {
-        console.error('Unexpected error:', err);
+        console.error('Error fetching listing:', err);
         return null;
     }
 };
 
-export const searchListings = async (query: string, category?: string): Promise<Property[]> => {
+export const searchListings = async (searchQuery: string, category?: string): Promise<Property[]> => {
     try {
-        let queryBuilder = supabase
-            .from('listings')
-            .select('*');
+        let q;
+        if (category && category !== 'All') {
+            q = query(collection(db, 'listings'), where('category', '==', category), orderBy('created_at', 'desc'));
+        } else {
+            q = query(collection(db, 'listings'), orderBy('created_at', 'desc'));
+        }
 
-        if (query) {
-            const sanitized = sanitizeFilterValue(query.trim());
-            if (sanitized) {
-                queryBuilder = queryBuilder.or(`title.ilike.%${sanitized}%,location.ilike.%${sanitized}%`);
+        const querySnapshot = await getDocs(q);
+        let results = querySnapshot.docs.map(doc => mapListingToProperty(doc.data(), doc.id));
+
+        if (searchQuery) {
+            const lowerQuery = searchQuery.trim().toLowerCase();
+            if (lowerQuery) {
+                results = results.filter(p =>
+                    p.title.toLowerCase().includes(lowerQuery) ||
+                    p.location.toLowerCase().includes(lowerQuery)
+                );
             }
         }
 
-        if (category && category !== 'All') {
-            queryBuilder = queryBuilder.eq('category', category);
-        }
-
-        const { data, error } = await queryBuilder.order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error searching listings:', error);
-            return [];
-        }
-
-        return (data || []).map(mapListingToProperty);
+        return results;
     } catch (err) {
-        console.error('Unexpected error:', err);
+        console.error('Error searching listings:', err);
         return [];
     }
 };
 
 export const fetchListingsByCategory = async (category: string): Promise<Property[]> => {
     try {
-        let queryBuilder = supabase.from('listings').select('*');
-
+        let q;
         if (category !== 'All') {
-            queryBuilder = queryBuilder.eq('category', category);
+            q = query(collection(db, 'listings'), where('category', '==', category), orderBy('created_at', 'desc'));
+        } else {
+            q = query(collection(db, 'listings'), orderBy('created_at', 'desc'));
         }
-
-        const { data, error } = await queryBuilder.order('created_at', { ascending: false });
-
-        if (error) {
-            console.error('Error fetching by category:', error);
-            return [];
-        }
-
-        return (data || []).map(mapListingToProperty);
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => mapListingToProperty(doc.data(), doc.id));
     } catch (err) {
-        console.error('Unexpected error:', err);
+        console.error('Error fetching by category:', err);
         return [];
     }
 };

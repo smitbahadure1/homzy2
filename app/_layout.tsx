@@ -1,31 +1,45 @@
+import 'react-native-reanimated';
+import 'react-native-url-polyfill/auto';
 
 import { FavoritesProvider } from '@/context/FavoritesContext';
 import { ThemeProvider as AppThemeProvider, useTheme } from '@/context/ThemeContext';
 import { tokenCache } from '@/lib/auth';
-import { ClerkProvider } from '@clerk/clerk-expo';
+import { saveUserToDB } from '@/services/userService';
+import { ClerkProvider, useUser } from '@clerk/clerk-expo';
 import { Inter_400Regular, Inter_700Bold, useFonts } from '@expo-google-fonts/inter';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { Text, View } from 'react-native';
-import 'react-native-reanimated';
-import 'react-native-url-polyfill/auto';
-
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 function RootContent() {
   const { isDarkMode } = useTheme();
+  const { user, isLoaded, isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn && user) {
+      saveUserToDB({
+        id: user.id,
+        email: user.primaryEmailAddress?.emailAddress || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        image_url: user.imageUrl || ''
+      });
+    }
+  }, [isLoaded, isSignedIn, user]);
 
   return (
     <NavThemeProvider value={isDarkMode ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="admin" options={{ headerShown: false }} />
-        <Stack.Screen name="listing/[id]" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="listing/[id]" options={{ presentation: 'modal' }} />
       </Stack>
       <StatusBar style={isDarkMode ? "light" : "dark"} />
     </NavThemeProvider>

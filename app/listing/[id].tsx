@@ -8,6 +8,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Image, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Calendar } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const useCallback = (React as any).useCallback;
@@ -61,30 +62,54 @@ export default function ListingDetailScreen() {
 
     const [nights, setNights] = useState(3);
     const [showCalendar, setShowCalendar] = useState(false);
-    const [startDate, setStartDate] = useState<number | null>(null);
-    const [endDate, setEndDate] = useState<number | null>(null);
+    const [startDate, setStartDate] = useState<string | null>(null);
+    const [endDate, setEndDate] = useState<string | null>(null);
 
     const priceVal = parsePrice(price);
     const cleaningFee = 2500;
     const serviceFee = 1500;
 
-    const calculatedNights = startDate && endDate ? endDate - startDate : nights;
+    const calculatedNights = startDate && endDate
+        ? Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 3600 * 24))
+        : nights;
     const calculatedPrice = priceVal * calculatedNights;
     const totalBookingPrice = calculatedPrice + cleaningFee + serviceFee;
 
-    const handleDateSelect = (day: number) => {
+    const handleDateSelect = (day: any) => {
+        const dateString = day.dateString;
         if (!startDate || (startDate && endDate)) {
-            setStartDate(day);
+            setStartDate(dateString);
             setEndDate(null);
         } else if (startDate && !endDate) {
-            if (day > startDate) {
-                setEndDate(day);
-                setNights(day - startDate);
+            if (new Date(dateString) > new Date(startDate)) {
+                setEndDate(dateString);
+                setNights(Math.ceil((new Date(dateString).getTime() - new Date(startDate).getTime()) / (1000 * 3600 * 24)));
                 setShowCalendar(false);
             } else {
-                setStartDate(day);
+                setStartDate(dateString);
             }
         }
+    };
+
+    const getMarkedDates = () => {
+        const marked: any = {};
+        if (startDate) {
+            marked[startDate] = { startingDay: true, color: theme.text, textColor: theme.bg };
+        }
+        if (endDate) {
+            marked[endDate] = { endingDay: true, color: theme.text, textColor: theme.bg };
+        }
+        if (startDate && endDate) {
+            let curr = new Date(startDate);
+            let end = new Date(endDate);
+            curr.setDate(curr.getDate() + 1);
+            while (curr < end) {
+                const dateString = curr.toISOString().split('T')[0];
+                marked[dateString] = { color: theme.border, textColor: theme.text };
+                curr.setDate(curr.getDate() + 1);
+            }
+        }
+        return marked;
     };
 
     const formatCurrency = (amount: number) => {
@@ -181,8 +206,8 @@ export default function ListingDetailScreen() {
                     listing_location: String(location),
                     listing_image: mainImage,
                     listing_price: priceVal,
-                    check_in_date: startDate && endDate ? `Oct ${startDate}` : 'TBD',
-                    check_out_date: startDate && endDate ? `Oct ${endDate}` : 'TBD',
+                    check_in_date: startDate && endDate ? startDate : 'TBD',
+                    check_out_date: startDate && endDate ? endDate : 'TBD',
                     nights: calculatedNights,
                     guests: guestCount,
                     total_price: totalBookingPrice,
@@ -519,7 +544,7 @@ export default function ListingDetailScreen() {
                                     <View>
                                         <Text style={[styles.tripLabel, { color: theme.text }]}>Dates</Text>
                                         <Text style={[styles.tripValue, { color: theme.subText }]}>
-                                            {startDate && endDate ? `Oct ${startDate} - Oct ${endDate}` : "Select dates"}
+                                            {startDate && endDate ? `${startDate} - ${endDate}` : "Select dates"}
                                         </Text>
                                     </View>
                                     <TouchableOpacity onPress={handleDateEdit}>
@@ -746,29 +771,22 @@ export default function ListingDetailScreen() {
                                 <Ionicons name="close" size={24} color={theme.text} />
                             </TouchableOpacity>
                         </View>
-                        <Text style={[styles.monthTitle, { color: theme.subText }]}>October 2024</Text>
-                        <View style={styles.calendarGrid}>
-                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                                <Text key={`day-label-${d}`} style={styles.dayLabel} {...({} as any)}>{d}</Text>
-                            ))}
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map(day => {
-                                const isSelected = day === startDate || day === endDate;
-                                const inRange = startDate && endDate && day > startDate && day < endDate;
-                                return (
-                                    <TouchableOpacity
-                                        key={day}
-                                        style={[
-                                            styles.dayCell,
-                                            isSelected ? [styles.daySelected, { backgroundColor: theme.text }] : undefined,
-                                            inRange ? [styles.dayInRange, { backgroundColor: theme.border }] : undefined
-                                        ]}
-                                        onPress={() => handleDateSelect(day)}
-                                    >
-                                        <Text style={[styles.dayText, { color: theme.text }, isSelected && { color: theme.bg, fontWeight: 'bold' }]}>{day}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                        <Calendar
+                            markingType={'period'}
+                            markedDates={getMarkedDates()}
+                            onDayPress={handleDateSelect}
+                            theme={{
+                                calendarBackground: theme.modalBg,
+                                textSectionTitleColor: theme.subText,
+                                selectedDayBackgroundColor: theme.text,
+                                selectedDayTextColor: theme.bg,
+                                todayTextColor: '#FF385C',
+                                dayTextColor: theme.text,
+                                textDisabledColor: theme.border,
+                                arrowColor: theme.text,
+                                monthTextColor: theme.text,
+                            }}
+                        />
 
                         <TouchableOpacity style={[styles.confirmDatesBtn, { backgroundColor: theme.text }]} onPress={() => setShowCalendar(false)}>
                             <Text style={[styles.confirmDatesText, { color: theme.bg }]}>Confirm</Text>
@@ -781,7 +799,9 @@ export default function ListingDetailScreen() {
             <View style={[styles.footer, { backgroundColor: theme.bg, borderTopColor: theme.border }]}>
                 <View style={styles.priceBox}>
                     <Text style={[styles.price, { color: theme.text }]}>{price}</Text>
-                    <Text style={[styles.date, { color: theme.text }]}>Oct 24 – 29</Text>
+                    <Text style={[styles.date, { color: theme.subText, fontSize: 12 }]}>
+                        {startDate && endDate ? `${startDate} to ${endDate}` : 'Select dates'}
+                    </Text>
                 </View>
                 <TouchableOpacity style={[styles.bookBtn, { backgroundColor: theme.text }]} onPress={handleBooking}>
                     <Text style={[styles.bookBtnText, { color: theme.bg }]}>Reserve</Text>

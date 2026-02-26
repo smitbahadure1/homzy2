@@ -1,5 +1,6 @@
 import { useTheme } from '@/context/ThemeContext';
 import { useWarmUpBrowser } from '@/lib/useWarmUpBrowser';
+import { checkIsAdminDb } from '@/services/userService';
 import { useAuth, useOAuth, useSignIn, useSignUp } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -88,7 +89,9 @@ export default function AuthScreen() {
 
             if (createdSessionId) {
                 setActive!({ session: createdSessionId });
-                router.replace('/(tabs)');
+                const userEmail = signIn?.identifier || signUp?.emailAddress;
+                const isAdmin = await checkIsAdminDb(userEmail);
+                router.replace(isAdmin ? '/admin' : '/(tabs)');
             } else {
                 // Check if further steps are needed (like MFA)
                 // For this simple example, we assume successful creation or sign-in leads to session
@@ -121,7 +124,8 @@ export default function AuthScreen() {
                 password,
             });
             await setSignInActive({ session: completeSignIn.createdSessionId });
-            router.replace('/(tabs)');
+            const isAdmin = await checkIsAdminDb(emailAddress);
+            router.replace(isAdmin ? '/admin' : '/(tabs)');
         } catch (err: any) {
             handleError(err);
         } finally {
@@ -165,7 +169,8 @@ export default function AuthScreen() {
             });
 
             await setSignUpActive({ session: completeSignUp.createdSessionId });
-            router.replace('/(tabs)');
+            const isAdmin = await checkIsAdminDb(emailAddress);
+            router.replace(isAdmin ? '/admin' : '/(tabs)');
         } catch (err: any) {
             handleError(err);
         } finally {
